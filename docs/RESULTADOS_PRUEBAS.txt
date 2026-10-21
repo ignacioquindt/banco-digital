@@ -1,0 +1,7 @@
+20/10/2026
+Java 21 + PostgreSQL 18.6
+Maven verify: 22 rápidas + 7 PostgreSQL, todas aprobadas.
+Newman: 17 solicitudes, cero fallos.
+Frontend jsdom: aprobado.
+Docker: arranque, operaciones básicas y persistencia tras reinicio verificados localmente el 21/10/2026.
+GitHub Actions: consultar el resultado de la ejecución en el repositorio.

@@ -1,0 +1,538 @@
+{
+  "info": {
+    "name": "Banco Digital · sesión y CSRF",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Leer docs/POSTMAN.md antes de ejecutar. No ejecutar el bloque de transferencias hasta preparar saldo. Variables password y email se completan localmente; no exportar credenciales."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "origenId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "destinoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "claveIdempotencia",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('claveIdempotencia')) pm.collectionVariables.set('claveIdempotencia',pm.variables.replaceIn('{{$guid}}'));",
+          "if (!['GET','HEAD'].includes(pm.request.method)) {",
+          "    pm.sendRequest(pm.collectionVariables.get('baseUrl')+'/api/auth/csrf', (err,res) => {",
+          "        if(err || res.code!==200) throw new Error('No se pudo obtener CSRF');",
+          "        const csrf=res.json();",
+          "        pm.request.headers.upsert({key:csrf.headerName,value:csrf.token});",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 · Estado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/estado",
+        "description": "01 · Estado"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 · Registro (email nuevo)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/registro",
+        "description": "02 · Registro (email nuevo)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nombre\": \"Usuario demo\", \"email\": \"{{email}}\", \"password\": \"{{password}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 · Iniciar sesión",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "url": "{{baseUrl}}/login",
+        "description": "03 · Iniciar sesión",
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "username",
+              "value": "{{email}}"
+            },
+            {
+              "key": "password",
+              "value": "{{password}}"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 302\", () => pm.response.to.have.status(302));"
+            ]
+          }
+        }
+      ],
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      }
+    },
+    {
+      "name": "04 · Mi perfil",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/perfil",
+        "description": "04 · Mi perfil"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 · Crear cuenta",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cuentas",
+        "description": "05 · Crear cuenta",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"numeroCuenta\": \"PM-{{$randomAlphaNumeric}}-{{$timestamp}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if(pm.response.code===201)pm.collectionVariables.set(\"origenId\",pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 · Mis cuentas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/cuentas",
+        "description": "06 · Mis cuentas"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 · Consultar cuenta",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/cuentas/{{origenId}}",
+        "description": "07 · Consultar cuenta"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 · Movimientos de cuenta",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/cuentas/{{origenId}}/movimientos",
+        "description": "08 · Movimientos de cuenta"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 · Mis transferencias",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/transferencias",
+        "description": "09 · Mis transferencias"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 · Actualizar nombre",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/perfil",
+        "description": "10 · Actualizar nombre",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nombre\": \"Mi nombre actualizado\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 · Transferir (requiere saldo y destino existente)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transferencias",
+        "description": "11 · Transferir (requiere saldo y destino existente)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"origenId\": \"{{origenId}}\", \"destinoId\": \"{{destinoId}}\", \"importe\": \"1.00\", \"claveIdempotencia\": \"{{claveIdempotencia}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if(pm.response.code===200)pm.collectionVariables.set(\"transferenciaId\",pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 · Repetir misma operación (mismo ID)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transferencias",
+        "description": "12 · Repetir misma operación (mismo ID)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"origenId\": \"{{origenId}}\", \"destinoId\": \"{{destinoId}}\", \"importe\": \"1.00\", \"claveIdempotencia\": \"{{claveIdempotencia}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if(pm.response.code===200)pm.test(\"Mismo ID\",()=>pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"transferenciaId\"))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 · Clave reutilizada con otros datos",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transferencias",
+        "description": "13 · Clave reutilizada con otros datos",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"origenId\": \"{{origenId}}\", \"destinoId\": \"{{destinoId}}\", \"importe\": \"2.00\", \"claveIdempotencia\": \"{{claveIdempotencia}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 · Importe negativo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transferencias",
+        "description": "14 · Importe negativo",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"origenId\": \"{{origenId}}\", \"destinoId\": \"{{destinoId}}\", \"importe\": \"-1.00\", \"claveIdempotencia\": \"{{claveIdempotencia}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 · Recuperar contraseña (SMTP opcional)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/recuperar",
+        "description": "15 · Recuperar contraseña (SMTP opcional)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{email}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 · Cerrar sesión",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/logout",
+        "description": "16 · Cerrar sesión"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 302\", () => pm.response.to.have.status(302));"
+            ]
+          }
+        }
+      ],
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      }
+    },
+    {
+      "name": "17 · Sin sesión no puedo consultar",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/cuentas",
+        "description": "17 · Sin sesión no puedo consultar"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

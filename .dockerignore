@@ -1,0 +1,8 @@
+target
+.git
+node_modules
+.env
+.env.*
+*.rar
+*.zip
+*.log
