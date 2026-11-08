@@ -34,7 +34,7 @@ public class UsuarioDetailsService implements UserDetailsService {
 
         return User.withUsername(usuario.getEmail())
             .password(usuario.getPasswordHash())
-            .roles("CLIENTE")
+            .authorities(usuario.getRol().name())
             .disabled(!usuario.isActivo())
             .build();
     }

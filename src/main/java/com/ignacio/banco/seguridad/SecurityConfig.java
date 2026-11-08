@@ -4,6 +4,7 @@ package com.ignacio.banco.seguridad;
 
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,6 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
     @Bean public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
     @Bean public SessionRegistry sessionRegistry() { return new SessionRegistryImpl(); }
@@ -23,7 +25,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.GET, "/login", "/login.html", "/registro.html",
                 "/recuperar.html", "/restablecer.html", "/css/**", "/js/**",
-                "/api/estado", "/api/auth/csrf", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
+                "/api/estado", "/api/auth/csrf",
+                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/auth/registro",
                 "/api/auth/recuperar", "/api/auth/restablecer").permitAll()
             .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()

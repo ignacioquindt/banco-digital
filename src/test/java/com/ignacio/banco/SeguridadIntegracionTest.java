@@ -113,5 +113,13 @@ class SeguridadIntegracionTest {
         var expirada=get(b,"/api/cuentas");assertTrue(expirada.statusCode()==401||expirada.statusCode()==302);
         login(b,correoB,"Recuperada2026!");assertEquals(200,get(b,"/api/perfil").statusCode());
 
+        // Verificacion RBAC: Cliente no puede acceder al endpoint de administracion
+        assertEquals(403, get(b, "/api/admin/usuarios").statusCode());
+
+        // Verificacion Observabilidad: Header X-Correlation-ID en respuestas de la API
+        var estado = get(b, "/api/estado");
+        assertEquals(200, estado.statusCode());
+        assertTrue(estado.headers().firstValue("X-Correlation-ID").isPresent());
+
     }
 }
