@@ -21,4 +21,7 @@ public interface CuentaRepository extends JpaRepository<Cuenta, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Cuenta c WHERE c.id = :id")
     Optional<Cuenta> buscarParaTransferencia(@Param("id") Long id);
+
+    @Query("SELECT COALESCE(SUM(c.saldo), 0) FROM Cuenta c")
+    java.math.BigDecimal calcularSaldoTotal();
 }

@@ -31,28 +31,42 @@ public class TransferenciaController {
     }
 
     @GetMapping
-    public List<Transferencia> listarTransferencias(
+    public List<TransferenciaResponse> listarTransferencias(
             Authentication authentication) {
 
         Long usuarioId = usuarioActualService.obtenerId(authentication);
-        return transferenciaRepository.buscarPorUsuario(usuarioId);
+        return transferenciaRepository.buscarPorUsuario(usuarioId)
+                .stream()
+                .map(TransferenciaResponse::desde)
+                .toList();
+    }
+
+    @GetMapping("/paginado")
+    public org.springframework.data.domain.Page<TransferenciaResponse> listarTransferenciasPaginado(
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "fecha", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable,
+            Authentication authentication) {
+
+        Long usuarioId = usuarioActualService.obtenerId(authentication);
+        return transferenciaRepository.buscarPorUsuarioPaginado(usuarioId, pageable)
+                .map(TransferenciaResponse::desde);
     }
 
     @PostMapping
-    public Transferencia transferir(
+    public TransferenciaResponse transferir(
             @Valid @RequestBody TransferenciaRequest solicitud,
             Authentication authentication) {
 
         Long usuarioId = usuarioActualService.obtenerId(authentication);
 
         try {
-            return transferenciaService.transferir(
+            Transferencia creada = transferenciaService.transferir(
                 solicitud.origenId(),
                 solicitud.destinoId(),
                 solicitud.importe(),
                 solicitud.claveIdempotencia(),
                 usuarioId
             );
+            return TransferenciaResponse.desde(creada);
         } catch (DataIntegrityViolationException ex) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,

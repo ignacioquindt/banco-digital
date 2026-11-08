@@ -36,4 +36,38 @@ public interface TransferenciaRepository
     List<Transferencia> buscarPorUsuario(
         @Param("usuarioId") Long usuarioId
     );
+
+    @Query(value = """
+        SELECT t FROM Transferencia t
+        WHERE t.origenId = :cuentaId OR t.destinoId = :cuentaId
+        """, countQuery = """
+        SELECT count(t) FROM Transferencia t
+        WHERE t.origenId = :cuentaId OR t.destinoId = :cuentaId
+        """)
+    org.springframework.data.domain.Page<Transferencia> buscarPorCuentaPaginado(
+        @Param("cuentaId") Long cuentaId,
+        org.springframework.data.domain.Pageable pageable
+    );
+
+    @Query(value = """
+        SELECT t FROM Transferencia t
+        WHERE t.origenId IN (
+            SELECT c.id FROM Cuenta c WHERE c.usuarioId = :usuarioId
+        )
+        OR t.destinoId IN (
+            SELECT c.id FROM Cuenta c WHERE c.usuarioId = :usuarioId
+        )
+        """, countQuery = """
+        SELECT count(t) FROM Transferencia t
+        WHERE t.origenId IN (
+            SELECT c.id FROM Cuenta c WHERE c.usuarioId = :usuarioId
+        )
+        OR t.destinoId IN (
+            SELECT c.id FROM Cuenta c WHERE c.usuarioId = :usuarioId
+        )
+        """)
+    org.springframework.data.domain.Page<Transferencia> buscarPorUsuarioPaginado(
+        @Param("usuarioId") Long usuarioId,
+        org.springframework.data.domain.Pageable pageable
+    );
 }

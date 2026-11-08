@@ -49,7 +49,7 @@ function pintar(){
         const card=document.createElement('article');card.className='card';
         card.append(texto('div','CUENTA EN '+c.moneda,'label'),texto('h2',c.numeroCuenta),texto('p','ID de cuenta: '+c.id,'muted'),texto('div',dinero(c.saldo),'balance'));
         const acciones=document.createElement('div');acciones.className='card-actions';
-        acciones.append(boton('Movimientos',()=>{$('filtroCuenta').value=String(c.id);tabla(filtrar(),$('historial'));mostrar('movimientos');}),boton('Transferir',()=>{$('origen').value=String(c.id);saldoOrigen();mostrar('transferir');},''));
+        acciones.append(boton('Movimientos',()=>{$('filtroCuenta').value=String(c.id);tabla(filtrar(),$('historial'));mostrar('movimientos');}),boton('Transferir',()=>{$('origen').value=String(c.id);saldoOrigen();mostrar('transferir');},''),boton('Cargar saldo',()=>abrirDeposito(c.id),'outline'));
         card.append(acciones);lista.append(card);
     }
     for(const id of ['origen','filtroCuenta']){
@@ -113,6 +113,35 @@ $('cuentaForm').addEventListener('submit',async e=>{
         $('cuentaDialog').close();$('cuentaForm').reset();aviso('Cuenta creada a tu nombre, con saldo cero.');
         try{await actualizar();}catch(error){aviso('La cuenta fue creada. Recargá el panel para actualizar el listado.',true);}
     }catch(error){$('cuentaError').textContent=error.message;}finally{$('crearCuenta').disabled=false;}
+});
+function abrirDeposito(id){
+    $('depositoCuentaId').value=id;
+    $('depositoImporte').value='';
+    $('depositoError').textContent='';
+    $('depositoDialog').showModal();
+}
+$('depositoForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const id=$('depositoCuentaId').value;
+    const txt=$('depositoImporte').value.trim().replace(/\./g,'').replace(',', '.');
+    $('confirmarDeposito').disabled=true;
+    $('depositoError').textContent='';
+    try{
+        await BancoAPI.pedir('/api/cuentas/'+id+'/depositar',{
+            method:'POST',
+            body:{
+                importe:txt,
+                claveIdempotencia:crypto.randomUUID()
+            }
+        });
+        $('depositoDialog').close();
+        aviso('Ingreso de fondos acreditado exitosamente.');
+        await actualizar();
+    }catch(error){
+        $('depositoError').textContent=error.message;
+    }finally{
+        $('confirmarDeposito').disabled=false;
+    }
 });
 $('perfilForm').addEventListener('submit',async e=>{
     e.preventDefault();const boton=e.submitter;boton.disabled=true;
