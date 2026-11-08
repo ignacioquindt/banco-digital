@@ -1,30 +1,38 @@
-# Demostración y decisiones técnicas
+# Demostración y decisiones técnicas para entrevistas
 
-## Descripción breve
+## Resumen del proyecto (Pitch de 30 segundos)
 
-Banco Digital es un simulador de banca desarrollado con Java, Spring Boot y PostgreSQL, con interfaz HTML/CSS/JavaScript. Permite gestionar cuentas y transferencias ficticias con autenticación, autorización por titular, transacciones e idempotencia. Incluye recuperación por correo y pruebas unitarias y de integración.
+> *"Banco Digital es una API financiera desarrollada en Java 21 y Spring Boot con persistencia en PostgreSQL, diseñada bajo estándares de ingeniería de sistemas bancarios y fintechs de alta concurrencia. Implementa el ciclo completo de fondos (Cash-in, Cash-out y transferencias P2P), bloqueo pesimista ordenado para prevenir deadlocks, idempotencia basada en UUIDs, el patrón Transactional Outbox para entrega confiable de eventos sin dual-write, trazabilidad con Correlation ID en MDC, control de acceso basado en roles (RBAC) y migraciones de base de datos continuas con Flyway."*
 
-## Recorrido de 4 minutos
+---
 
-1. **Acceso:** mostrar login y registro propios. Entrar con un usuario de demostración, sin exponer claves ni configuración SMTP.
-2. **Panel:** mostrar saldos y últimas operaciones. Explicar que los datos vienen de PostgreSQL.
-3. **Cuenta:** crear una cuenta con saldo cero y mostrar su ID interno.
-4. **Transferencia:** enviar un importe pequeño desde una cuenta propia con saldo; revisar antes de confirmar. Mostrar comprobante y actualización de saldos.
-5. **Movimientos:** filtrar por cuenta, mostrar una operación y exportar CSV.
-6. **Seguridad:** entrar con otro usuario para demostrar que no ve las cuentas ajenas. No publicar credenciales personales.
-7. **Perfil y recuperación:** mostrar edición del nombre y explicar los tokens de un uso. Si hacés una recuperación en vivo, no grabes la URL con token ni el contenido privado de Gmail.
-8. **Pruebas:** mostrar el resumen de la suite y los resultados documentados de concurrencia, sin decir que es una prueba de carga masiva.
+## Recorrido de 5 minutos en una entrevista técnica
 
-## Decisiones técnicas
+1. **Ciclo de Fondos y Experiencia de Usuario (1 min):**
+   - Abrir el portal en `http://localhost:8080/index.html`.
+   - Mostrar una cuenta y hacer clic en **"Cargar saldo"**: ingresar `$50.000 ARS`.
+   - Explicar que la operación viaja al endpoint `POST /api/cuentas/{id}/depositar` con una clave de idempotencia única generada por el cliente y bloqueo pesimista en base de datos.
+2. **Transferencias y Concurrencia (1.5 min):**
+   - Abrir `TransferenciaService.java`.
+   - Mostrar el bloqueo pesimista ordenado (`minId` / `maxId`) explicando cómo previene abrazos mortales (*deadlocks*) cuando dos usuarios se transfieren mutuamente en el mismo instante.
+   - Explicar cómo la restricción de unicidad en base de datos protege contra débitos duplicados si se corta la red y el cliente reintenta la petición.
+3. **El Patrón de Oro: Transactional Outbox (1.5 min):**
+   - Abrir `OutboxService.java` y `OutboxPublisherJob.java`.
+   - Explicar por qué llamar a Kafka o microservicios externos dentro de `@Transactional` es un antipatrón en finanzas (*dual-write problem*).
+   - Mostrar cómo el evento se persiste atómicamente en la tabla `outbox_eventos` dentro de la misma transacción contable, y cómo el *scheduler* asíncrono lo despacha garantizando entrega *at-least-once*.
+4. **Seguridad, Auditoría y Observabilidad (1 min):**
+   - Mostrar `CorrelationIdFilter.java` y cómo el `X-Correlation-ID` viaja en el MDC de SLF4J, en los logs y en cada registro inmutable de la tabla `auditoria_operaciones`.
+   - Mostrar los endpoints administrativos en `AdminController.java` (`ROLE_ADMIN`) y cómo se consultan las métricas globales y la auditoría.
 
-| Pregunta | Idea a explicar |
+---
+
+## Preguntas técnicas típicas y respuestas recomendadas
+
+| Pregunta de entrevista | Respuesta conceptual y defendible |
 |---|---|
-| ¿Por qué BigDecimal? | Los cálculos monetarios del servidor necesitan decimales exactos. |
-| ¿Qué garantiza @Transactional? | Débito, crédito y registro confirman juntos o se revierten ante la excepción. |
-| ¿Para qué bloquear cuentas? | Dos operaciones no deben decidir sobre el mismo saldo desactualizado. |
-| ¿Por qué ordenar los bloqueos? | Todos solicitan las cuentas en el mismo orden de ID para reducir riesgo de deadlock. |
-| ¿Qué hace la idempotencia? | La repetición con la misma clave y datos devuelve la operación existente sin volver a debitar. |
-| ¿La interfaz es la barrera de seguridad? | No: el backend identifica al usuario autenticado y comprueba la propiedad. |
-| ¿Qué guarda de la contraseña? | Su hash BCrypt. El hash del token de recuperación se guarda con SHA-256, porque el token ya es aleatorio y de alta entropía. |
-| ¿Cómo sale un correo desde localhost? | La aplicación local se conecta al SMTP de Gmail, que entrega el mensaje por Internet. |
-| ¿Qué diferencia hay entre pruebas? | Mockito aísla lógica; integración verifica HTTP/JPA/transacciones; los escenarios de concurrencia se verifican con PostgreSQL real. |
+| **¿Qué es el *Transactional Outbox Pattern* y qué problema resuelve?** | En sistemas distribuidos, si debitás una cuenta y en el mismo método llamás a Kafka, podés sufrir una inconsistencia dual: si Kafka falla, tenés que hacer rollback; si la base confirma pero Kafka pierde conexión, el evento nunca se publicó. El patrón Outbox resuelve esto persistiendo el evento en una tabla de la misma base de datos dentro de la misma transacción ACID. Luego, un proceso independiente lee la tabla y lo envía al broker, garantizando entrega confiable (*at-least-once*). |
+| **¿Cómo prevenís deadlocks en transferencias concurrentes?** | Si el usuario A transfiere a B y B a A simultáneamente, un bloqueo desordenado genera espera circular. Al ordenar los bloqueos por ID (`Math.min` y luego `Math.max`), todas las transacciones compiten por los recursos en el mismo orden lineal, eliminando la posibilidad de deadlock. |
+| **¿Para qué sirve la clave de idempotencia?** | Si una app envía una transferencia o depósito y se corta la conexión antes de recibir la respuesta HTTP, el cliente reintenta. La base de datos garantiza mediante una restricción `UNIQUE` que no se vuelva a debitar; el backend detecta el reintento y devuelve la operación existente. |
+| **¿Por qué usar `BigDecimal` en lugar de `double` o `float`?** | Los tipos flotantes binarios sufren errores de precisión por redondeo en operaciones repetidas. En sistemas bancarios, cada centavo debe ser exacto; `BigDecimal` ofrece precisión arbitraria y control estricto de escala. |
+| **¿Por qué paginar con `Pageable`?** | Previene que una consulta de movimientos cargue miles de entidades en memoria de golpe, evitando saturar el garbage collector y provocar caídas por `OutOfMemoryError` en la JVM. |
+| **¿Qué es un Correlation ID y por qué usar MDC?** | El filtro asigna o propaga un identificador único que se almacena en el `Mapped Diagnostic Context` (MDC) del hilo, logrando que cada línea de log incluya el mismo ID para rastrear el ciclo de vida completo de la petición en un sistema distribuido. |

@@ -1,49 +1,66 @@
 # Arquitectura y API
 
-## Responsabilidades
+## Responsabilidades y Capas
 
 | Componente | Responsabilidad |
 |---|---|
-| HTML/CSS/JavaScript | Presentación, formularios y solicitudes fetch |
-| SecurityConfig | Acceso público/autenticado, login, sesiones y CSRF |
-| UsuarioActualService | Identificar al usuario desde la autenticación del servidor |
-| Controllers | Recibir datos válidos y devolver respuestas HTTP |
-| Services | Reglas de registro, transferencia, perfil y recuperación |
-| Repositories | Consultas JPA y bloqueos |
-| Entities | Usuarios, cuentas, transferencias y tokens persistidos |
-| PostgreSQL | Persistencia, integridad referencial y unicidad |
+| Frontend (HTML/JS / React) | Presentación, formularios y consumo de la API REST |
+| CorrelationIdFilter | Asignación y propagación del header `X-Correlation-ID` en MDC y respuestas |
+| SecurityConfig & RBAC | Autorización declarativa por roles (`ROLE_CLIENTE`, `ROLE_ADMIN`, `ROLE_AUDITOR`) con `@EnableMethodSecurity` |
+| Controllers | Validación de entrada, orquestación y mapeo a DTOs (Java Records) |
+| Services | Lógica de negocio (transferencias, cuentas, depósitos/extracciones, perfil, administración) |
+| Transactional Outbox | Persistencia atómica de eventos en `outbox_eventos` y despacho desacoplado (`OutboxPublisherJob`) |
+| Domain Events & Listeners | Desacoplamiento transaccional (`AFTER_COMMIT`) para auditoría y notificaciones |
+| Repositories | Consultas JPA, paginación (`Pageable`), agregación y bloqueos pesimistas ordenados |
+| Entities | Modelo de persistencia relacional con validaciones y restricciones de integridad |
+| Flyway | Migraciones incrementales del esquema de base de datos (`V1`, `V2`, `V3`) |
+| PostgreSQL | Motor de base de datos transaccional con restricciones de unicidad y cheques |
 
-Las cuentas se vinculan al usuario por usuario_id. Cada transferencia guarda origen_id y destino_id. El token de recuperación vincula usuario_id, vencimiento, estado de uso y versión de credenciales.
+---
 
-## Endpoints
+## Endpoints del Sistema
 
-| Método | Ruta | Acceso y propósito |
-|---|---|---|
-| GET | /api/estado | Público: estado |
-| GET | /api/auth/csrf | Público: token vinculado a sesión |
-| POST | /api/auth/registro | Público con CSRF: registro |
-| POST | /login | Formulario con CSRF: autenticar |
-| POST | /logout | CSRF: cerrar sesión |
-| POST | /api/auth/recuperar | Público con CSRF: solicitar enlace SMTP |
-| POST | /api/auth/restablecer | Público con CSRF: consumir token |
-| GET | /api/cuentas | Cuentas del usuario autenticado |
-| GET | /api/cuentas/{id} | Cuenta propia; 404 si no está disponible para ese usuario |
-| POST | /api/cuentas | Crear cuenta para el usuario autenticado |
-| GET | /api/cuentas/{id}/movimientos | Movimientos de cuenta propia |
-| GET | /api/transferencias | Operaciones que involucran cuentas propias |
-| POST | /api/transferencias | Transferir desde cuenta propia |
-| GET | /api/perfil | ID, nombre y correo propios |
-| PUT | /api/perfil | Actualizar nombre |
-| POST | /api/perfil/password | Cambiar contraseña comprobando la actual |
+### Rutas de Cuentas y Fondos (Cash-In y Cash-Out)
+| Método | Ruta | Acceso | Propósito |
+|---|---|---|---|
+| GET | `/api/cuentas` | Autenticado | Listar cuentas bancarias propias (`List<CuentaResponse>`) |
+| GET | `/api/cuentas/{id}` | Autenticado (titular) | Detalle de cuenta propia (`CuentaResponse`) |
+| POST | `/api/cuentas` | Autenticado | Creación de cuenta propia con saldo inicial cero |
+| POST | `/api/cuentas/{id}/depositar` | Autenticado (titular) | **Ingresar dinero (Cash-In)** con idempotencia, bloqueo pesimista y outbox |
+| POST | `/api/cuentas/{id}/extraer` | Autenticado (titular) | **Extraer dinero (Cash-Out)** validando saldo disponible |
+| GET | `/api/cuentas/{id}/operaciones` | Autenticado (titular) | Historial de depósitos y extracciones de la cuenta |
+| GET | `/api/cuentas/{id}/movimientos` | Autenticado (titular) | Movimientos de transferencias (formato lista) |
+| GET | `/api/cuentas/{id}/movimientos/paginado` | Autenticado (titular) | Movimientos de transferencias con paginación empresarial (`Page<TransferenciaResponse>`) |
 
-Todas las operaciones que cambian datos usan CSRF. Las rutas sensibles tienen un límite local por IP. Las credenciales del formulario se llaman username y password; username contiene el correo.
+### Transferencias y Paginación
+| Método | Ruta | Acceso | Propósito |
+|---|---|---|---|
+| GET | `/api/transferencias` | Autenticado | Lista completa de transferencias propias |
+| GET | `/api/transferencias/paginado` | Autenticado | Historial paginado (`Page<TransferenciaResponse>`) con `page`, `size` y `sort` |
+| POST | `/api/transferencias` | Autenticado (origen propio) | Ejecutar transferencia atómica con bloqueo pesimista ordenado, idempotencia y outbox |
 
-## Transferencia
+### Rutas Administrativas y Auditoría (ROLE_ADMIN / ROLE_AUDITOR)
+| Método | Ruta | Acceso | Propósito |
+|---|---|---|---|
+| GET | `/api/admin/usuarios` | `ROLE_ADMIN` | Listar todos los usuarios del sistema, sus roles y estado |
+| PATCH | `/api/admin/usuarios/{id}/rol` | `ROLE_ADMIN` | Modificar rol (`ROLE_CLIENTE`, `ROLE_ADMIN`, `ROLE_AUDITOR`) |
+| PATCH | `/api/admin/usuarios/{id}/estado` | `ROLE_ADMIN` | Activar o desactivar cuenta de usuario |
+| GET | `/api/admin/metricas` | `ROLE_ADMIN` o `ROLE_AUDITOR` | Métricas globales (total usuarios, cuentas, saldo total circulante y transferencias) |
+| GET | `/api/admin/auditoria` | `ROLE_ADMIN` o `ROLE_AUDITOR` | Consultar los últimos 100 eventos de auditoría registrados con correlation ID |
 
-El controlador obtiene el usuario de la sesión. El servicio valida el importe y los IDs, bloquea las dos cuentas en orden ascendente, comprueba titularidad del origen y consulta la clave de idempotencia. Si ya existe, compara los datos; si coinciden devuelve la anterior y si no responde 409. Si no existe, debita, acredita y registra en la misma transacción.
+---
 
-El frontend conserva el pedido pendiente en sessionStorage de esa pestaña antes de enviarlo. Tras un fallo de red reintenta con la misma clave. Si se cierra esa pestaña puede perderse ese estado: consultar movimientos antes de repetir manualmente una operación de resultado incierto.
+## Patrones de Arquitectura Clave
 
-## Recuperación
+### 1. Transactional Outbox Pattern (Garantía de Entrega Sin Dual-Write)
+En arquitecturas distribuidas y fintechs (Mercado Pago, Stripe), disparar una llamada a Kafka o a una API externa dentro de una transacción `@Transactional` genera riesgo de inconsistencia (si la base confirma pero la red falla, el mensaje se pierde).
+El patrón implementado funciona así:
+1. Dentro de la transacción del depósito o transferencia, se guarda el movimiento contable y un registro en la tabla `outbox_eventos` con estado `PENDIENTE`.
+2. Ambos confirman o revierten juntos (atomicidad ACID).
+3. El proceso en segundo plano `OutboxPublisherJob` consulta los eventos pendientes cada 5 segundos, los despacha hacia el bus/topic de streaming y los marca como `PROCESADO`.
 
-La aplicación genera 32 bytes aleatorios, envía el token en el fragmento del enlace y guarda solamente su hash. Al usarlo, bloquea el token y el usuario, verifica vencimiento/uso/versión, cambia el hash de la contraseña y consume el token. Cambiar la contraseña incrementa la versión de credenciales e invalida enlaces anteriores. Expira las sesiones registradas en esta instancia.
+### 2. Bloqueo Pesimista Ordenado (Deadlock Prevention)
+Al transferir entre dos cuentas, se ordenan sus IDs (`minId` y `maxId`) para que cualquier transacción concurrente siempre adquiera los bloqueos en el mismo orden, eliminando el riesgo de abrazo mortal (*deadlock*).
+
+### 3. Paginación y Eficiencia de Memoria
+Se implementó `Pageable` para permitir consultar movimientos en bloques controlados (ej. `GET /api/cuentas/1/movimientos/paginado?page=0&size=10&sort=fecha,desc`), protegiendo a la JVM de sobrecargas de memoria ante cuentas con miles de movimientos.

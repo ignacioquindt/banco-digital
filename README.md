@@ -1,96 +1,82 @@
 # Banco Digital
 
-**Simulador de banca digital · Java, Spring Boot y PostgreSQL**
+**API bancaria y simulador transaccional de nivel empresarial · Java 21, Spring Boot y PostgreSQL**
 
-Aplicación full stack con backend Java/Spring Boot, PostgreSQL y frontend HTML, CSS y JavaScript. Permite registrarse, iniciar sesión, crear cuentas, transferir dinero ficticio y consultar movimientos. El objetivo es demostrar desarrollo de APIs, persistencia, seguridad y manejo de operaciones concurrentes.
+Aplicación financiera orientada a servicios transaccionales de alta concurrencia, construida bajo estándares de la industria bancaria y fintech (Mercado Pago, Ualá, banca corporativa). Implementa el ciclo completo de fondos (Cash-in, Cash-out y transferencias P2P), manejo de concurrencia con bloqueo pesimista ordenado, idempotencia estricta por UUID, el patrón **Transactional Outbox** para entrega confiable de eventos, desacoplamiento por eventos de dominio (`AFTER_COMMIT`), trazabilidad mediante Correlation ID (MDC), control de acceso basado en roles (RBAC), paginación con `Pageable` y migraciones de esquema continuas con Flyway.
 
-## Funcionalidades
+---
 
-- Registro y login con sesión; contraseñas protegidas mediante BCrypt.
-- Panel con saldo total en ARS y operaciones recientes.
-- Creación de cuentas propias con saldo inicial cero.
-- Transferencias con validación, confirmación y comprobante descargable.
-- Idempotencia por UUID y restricción única en la base.
-- Débito y crédito en una transacción; bloqueo pesimista de cuentas en orden de ID.
-- Autorización por titular para cuentas, movimientos y cuenta de origen.
-- Historial con filtros por cuenta, tipo y fecha; exportación CSV.
-- Edición de nombre, cambio de contraseña e invalidación de sesiones.
-- Recuperación de contraseña por SMTP, con token de un uso y vencimiento de 20 minutos.
-- Protección CSRF y límite local de intentos por IP para rutas sensibles.
-- Diseño adaptable; fechas en Buenos Aires y formato de 24 horas.
+## Capacidades y Arquitectura
+
+- **Ciclo Completo de Fondos:** Endpoints de depósito (**Cash-in**) y extracción (**Cash-out**) con snapshot de saldo posterior y validaciones de escala monetaria en `BigDecimal`.
+- **Transactional Outbox Pattern:** Persistencia atómica de eventos en la tabla `outbox_eventos` dentro de la misma transacción contable, despachados de forma desacoplada y asíncrona hacia brokers de mensajería (Kafka/RabbitMQ) sin riesgo de inconsistencia dual (*dual-write problem*).
+- **Prevención de Deadlocks:** Bloqueo pesimista ordenado (`PESSIMISTIC_WRITE`) sobre las cuentas involucradas (`minId` y `maxId`) para mitigar bloqueos mutuos ante transferencias simultáneas.
+- **Idempotencia Garantizada:** Clave de idempotencia única (UUID) para evitar duplicación de movimientos ante cortes de red y reintentos automáticos del cliente.
+- **Seguridad y Control de Acceso (RBAC):** Autorización granular por roles (`ROLE_CLIENTE`, `ROLE_ADMIN`, `ROLE_AUDITOR`) con `@EnableMethodSecurity`.
+- **Auditoría Transaccional:** Registro inmutable e independiente (`REQUIRES_NEW`) de cada operación bancaria y evento administrativo.
+- **Trazabilidad y Observabilidad:** Inyección de `X-Correlation-ID` en el MDC de SLF4J a través de `CorrelationIdFilter` para seguimiento extremo a extremo en logs.
+- **Paginación Empresarial:** Consultas paginadas mediante `Pageable` de Spring Data (`page`, `size`, `sort`) para proteger el uso de memoria de la JVM.
+- **Evolución de Base de Datos:** Versionado declarativo e incremental mediante Flyway (`V1__esquema_inicial.sql`, `V2__roles_y_auditoria.sql`, `V3__outbox_y_operaciones.sql`).
+- **Pruebas Automatizadas:** 31 pruebas unitarias y de integración con JUnit 5 y Mockito.
+
+---
 
 ## Tecnologías
 
-| Capa | Tecnología |
+| Capa / Módulo | Tecnología |
 |---|---|
-| Backend | Java 21 objetivo, Spring Boot 4.1.1 |
-| Persistencia | Spring Data JPA, Hibernate, PostgreSQL |
-| Seguridad | Spring Security, BCrypt, sesiones y CSRF |
-| Correo | Spring Mail / SMTP |
-| Frontend | HTML, CSS y JavaScript; sin compilación frontend |
-| Pruebas | JUnit, Mockito, H2, PostgreSQL, cliente HTTP y jsdom |
-| Construcción | Maven Wrapper, Docker Compose, GitHub Actions |
-| API y migraciones | Swagger/OpenAPI, Postman, Flyway |
+| **Backend** | Java 21, Spring Boot 4.1.1 |
+| **Persistencia** | Spring Data JPA, Hibernate, PostgreSQL |
+| **Migraciones** | Flyway DB (V1, V2, V3) |
+| **Seguridad** | Spring Security, BCrypt, RBAC, protección CSRF y rate limiting |
+| **Patrón Outbox** | Transactional Outbox Pattern con `@Scheduled` dispatcher |
+| **Eventos** | Spring ApplicationEventPublisher / Kafka ready |
+| **Observabilidad** | SLF4J, Logback con MDC (Correlation ID) |
+| **Documentación** | Swagger / OpenAPI 3, colección Postman |
+| **Frontend** | HTML5, CSS3, JavaScript modular con botones de Cash-in / Cash-out |
+| **DevOps** | Docker Compose (PostgreSQL y Kafka 3.8 con KRaft), GitHub Actions |
 
-## Ejecutar
+---
 
-Consultar la **[guía de instalación](LEEME_PRIMERO.md)**. Docker incluye el entorno Java y PostgreSQL. Para ejecución nativa se requiere JDK 21 y PostgreSQL.
+## Ejecución Local
 
-### Base nueva con Docker
+### NetBeans / CLI (PostgreSQL local)
+
+Requisitos: JDK 21+ y PostgreSQL local con base `banco_digital`.
 
 ```sh
-# Copiar .env.example a .env y completar DB_PASSWORD localmente.
-docker compose up --build
+# Ejecutar suite completa de pruebas unitarias (31 tests)
+mvnw.cmd test
+
+# Iniciar la aplicación
+mvnw.cmd spring-boot:run
 ```
 
-Abrir http://localhost:8081/login.html y registrarse. Docker crea una base separada y Flyway crea el esquema; no incluye dinero ni usuarios de otras instalaciones.
+- Portal web: http://localhost:8080/index.html
+- Swagger UI: http://localhost:8080/swagger-ui.html
 
-### NetBeans / PostgreSQL instalado
+---
 
-JDK 21+, PostgreSQL y variable DB_PASSWORD. Para base vacía: crear solo la base y arrancar `mvnw.cmd spring-boot:run`. Flyway administra las tablas. Para conectar una base existente no vacía, seguir **[ACTUALIZAR.md](docs/ACTUALIZAR.md)** para adoptar el esquema con backup y baseline explícito.
+## Organización del Backend
 
-### API
+```
+src/main/java/com/ignacio/banco/
+├── admin/            # Endpoints y DTOs administrativos (usuarios, roles, auditoría, métricas)
+├── auditoria/        # Entidad, repositorio y servicio de auditoría transaccional
+├── comun/            # Filtro CorrelationId, manejador global de excepciones, OpenAPI
+├── cuentas/          # Entidad Cuenta, DTOs, CuentaService (Cash-in/Cash-out) y controlador
+├── eventos/          # Eventos de dominio y oyentes transaccionales (AFTER_COMMIT)
+├── outbox/           # Transactional Outbox Pattern (Entidad, repositorio, servicio y scheduler)
+├── recuperacion/     # Tokens temporales y servicio SMTP de recuperación
+├── seguridad/        # Configuración de Spring Security, RBAC, UserDetails y CSRF
+├── transferencias/   # Servicio transaccional, bloqueos, idempotencia y controlador
+└── usuarios/         # Entidad Usuario, enum Rol y registro
+```
 
-Las siguientes URLs corresponden a la ejecución nativa. Con Docker se utiliza el puerto 8081.
+---
 
-- Swagger de consulta: http://localhost:8080/swagger-ui.html
-- OpenAPI: http://localhost:8080/v3/api-docs
-- [Colección Postman y flujo sesión + CSRF](docs/POSTMAN.md).
+## Documentación y Guías de Entrevista
 
-### Verificación
-
-- `mvnw.cmd test`: unitarias y flujo HTTP con H2, con base H2 aislada.
-- `mvnw.cmd verify`: agrega integración PostgreSQL si TEST_DB_PASSWORD está definida y la base exclusiva de prueba está disponible.
-- [Configuración de la base de prueba y CI](docs/PRUEBAS.md).
-- `npm ci` y `npm run test:frontend`: comportamiento del panel con jsdom.
-
-### Organización del backend
-
-| Paquete | Responsabilidad |
-|---|---|
-| cuentas | Entidad, repositorio, entrada y endpoints de cuentas |
-| transferencias | Validación y procesamiento transaccional de movimientos |
-| usuarios | Registro, perfil y persistencia de usuarios |
-| seguridad | Autenticación, usuario actual, sesiones, CSRF y límite de solicitudes |
-| recuperacion | Tokens y recuperación por SMTP |
-| comun | Errores, navegación, estado y OpenAPI |
-
-La clase principal permanece en `com.ignacio.banco` para escanear los subpaquetes.
-
-Node.js es opcional: solo se usa para la prueba automatizada de frontend. Las credenciales SMTP también son opcionales para arrancar; se requieren para enviar recuperación por correo.
-
-## Evidencia y presentación
-
-- **[Validación](docs/VALIDACION.md):** resultados registrados, alcance de las pruebas y verificaciones pendientes.
-- **[Demostración y decisiones técnicas](docs/DEMO_Y_ENTREVISTA.md)**.
-- **[Arquitectura y endpoints](docs/ARQUITECTURA_Y_API.md)**.
-- **[Configuración de Windows](docs/CONFIGURACION_WINDOWS.md)**.
-- **[Mapa de clases](docs/MAPA_DE_CLASES.md)**.
-
-## Alcance
-
-Es un simulador educativo con dinero ficticio. La cuenta de destino se identifica por su ID interno, no por CBU o alias real. No integra bancos ni procesa fondos reales. No se presenta como software bancario listo para producción.
-
-La revisión móvil se hizo con emulación de Chrome y capturas, no con un teléfono físico. Las pruebas concurrentes cubren los escenarios documentados; no equivalen a una prueba de carga masiva. El correo SMTP funcionó con Gmail en el entorno local del autor, pero las credenciales no se distribuyen.
-
-Para un despliegue público quedan tareas de operación: HTTPS, secretos, copias de seguridad, observabilidad, paginación, mantenimiento de tokens, límites distribuidos y pruebas de carga. Ver los límites concretos en `docs/VALIDACION.md`.
+- **[Demostración y decisiones técnicas para entrevistas](docs/DEMO_Y_ENTREVISTA.md):** Pitch de 30 segundos, recorrido guiado y respuestas a preguntas técnicas de selección.
+- **[Arquitectura y especificación de endpoints](docs/ARQUITECTURA_Y_API.md):** Diagramas, modelo por capas y catálogo completo de rutas.
+- **[Mapa de clases y responsabilidades](docs/MAPA_DE_CLASES.md):** Detalle técnico de cada componente del sistema.
