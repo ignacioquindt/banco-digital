@@ -42,7 +42,7 @@ frontend/public/screenshots/
 frontend/public/*.mp4
 frontend/public/*.webm
 frontend/*.cjs
-frontend/video_generator.html
+frontend/*generator*.html
 cv.html
 .env
 .env.*
