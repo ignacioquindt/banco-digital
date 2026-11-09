@@ -59,6 +59,6 @@ public class PerfilService {
     private Usuario bloqueado(Long id) { return usuarios.buscarBloqueado(id).orElseThrow(() ->
         new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado")); }
     private PerfilController.PerfilRespuesta respuesta(Usuario u) {
-        return new PerfilController.PerfilRespuesta(u.getId(),u.getNombre(),u.getEmail());
+        return new PerfilController.PerfilRespuesta(u.getId(), u.getNombre(), u.getEmail(), u.getRol().name());
     }
 }

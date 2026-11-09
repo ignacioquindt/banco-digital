@@ -18,7 +18,7 @@ public class PerfilController {
     public PerfilController(PerfilService servicio, UsuarioActualService actual) {
         this.servicio = servicio; this.actual = actual;
     }
-    public record PerfilRespuesta(Long id, String nombre, String email) {}
+    public record PerfilRespuesta(Long id, String nombre, String email, String rol) {}
     public record NombreRequest(@NotBlank @Size(max=100) String nombre) {}
     public record PasswordRequest(@NotBlank String passwordActual,
         @NotBlank @Size(min=12,max=64) String passwordNueva) {}

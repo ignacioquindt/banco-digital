@@ -6,6 +6,7 @@ import CashOutModal from './components/CashOutModal';
 import TransferModal from './components/TransferModal';
 import CreateAccountModal from './components/CreateAccountModal';
 import AdminPanel from './components/AdminPanel';
+import PerfilView from './components/PerfilView';
 
 export default function App() {
   const [perfil, setPerfil] = useState(null);
@@ -116,6 +117,21 @@ export default function App() {
           >
             🛡️ Administración
           </button>
+          <button
+            className={`nav-item ${currentView === 'perfil' ? 'active' : ''}`}
+            onClick={() => setCurrentView('perfil')}
+          >
+            👤 Mi Perfil
+          </button>
+          <a
+            href="http://localhost:8080/swagger-ui/index.html"
+            target="_blank"
+            rel="noreferrer"
+            className="nav-item"
+            style={{ textDecoration: 'none', color: '#38bdf8' }}
+          >
+            📖 Documentación Swagger
+          </a>
         </nav>
 
         <div style={{ padding: '16px 0', borderTop: '1px solid var(--border)', fontSize: '0.78rem', color: 'var(--text-dim)' }}>
@@ -316,6 +332,15 @@ export default function App() {
 
           {/* VISTA: ADMIN */}
           {currentView === 'admin' && <AdminPanel />}
+
+          {/* VISTA: PERFIL */}
+          {currentView === 'perfil' && (
+            <PerfilView
+              perfil={perfil}
+              onPerfilActualizado={(p) => setPerfil({ ...perfil, ...p })}
+              onLogout={handleLogout}
+            />
+          )}
         </div>
       </main>
 
