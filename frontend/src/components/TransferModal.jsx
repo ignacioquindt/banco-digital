@@ -32,8 +32,8 @@ export default function TransferModal({ cuentas, defaultOrigenId, onClose, onSuc
     setLoading(true);
     try {
       const claveIdempotencia = crypto.randomUUID();
-      await BancoApi.transferir(Number(origenId), Number(destinoId), val, claveIdempotencia);
-      onSuccess(`Transferencia de $ ${val} ARS enviada exitosamente a cuenta #${destinoId}`);
+      const res = await BancoApi.transferir(Number(origenId), Number(destinoId), val, claveIdempotencia);
+      onSuccess(`Transferencia de $ ${val} ARS enviada exitosamente a cuenta #${destinoId}`, res);
       onClose();
     } catch (err) {
       setError(err.message || 'Error al ejecutar la transferencia');

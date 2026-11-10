@@ -7,6 +7,7 @@ import TransferModal from './components/TransferModal';
 import CreateAccountModal from './components/CreateAccountModal';
 import AdminPanel from './components/AdminPanel';
 import PerfilView from './components/PerfilView';
+import ComprobanteModal from './components/ComprobanteModal';
 
 export default function App() {
   const [perfil, setPerfil] = useState(null);
@@ -21,6 +22,7 @@ export default function App() {
   const [modalCashOut, setModalCashOut] = useState(null);
   const [modalTransfer, setModalTransfer] = useState(false);
   const [modalCreateAccount, setModalCreateAccount] = useState(false);
+  const [comprobanteSeleccionado, setComprobanteSeleccionado] = useState(null);
 
   const cargarDatos = async () => {
     try {
@@ -207,12 +209,13 @@ export default function App() {
                       <th>Destino</th>
                       <th>Importe (ARS)</th>
                       <th>Referencia</th>
+                      <th>Comprobante</th>
                     </tr>
                   </thead>
                   <tbody>
                     {transferencias.length === 0 ? (
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 24 }}>
+                        <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 24 }}>
                           Todavía no registraste transferencias.
                         </td>
                       </tr>
@@ -227,6 +230,15 @@ export default function App() {
                             <code style={{ fontSize: '0.78rem', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>
                               {t.claveIdempotencia ? t.claveIdempotencia.slice(0, 8) + '...' : '—'}
                             </code>
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                              onClick={() => setComprobanteSeleccionado(t)}
+                            >
+                              📄 Ver comprobante
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -299,12 +311,13 @@ export default function App() {
                       <th>Destino</th>
                       <th>Importe (ARS)</th>
                       <th>Clave de Idempotencia</th>
+                      <th>Comprobante</th>
                     </tr>
                   </thead>
                   <tbody>
                     {transferencias.length === 0 ? (
                       <tr>
-                        <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 24 }}>
+                        <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 24 }}>
                           No hay movimientos registrados.
                         </td>
                       </tr>
@@ -320,6 +333,15 @@ export default function App() {
                             <code style={{ fontSize: '0.78rem', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>
                               {t.claveIdempotencia}
                             </code>
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                              onClick={() => setComprobanteSeleccionado(t)}
+                            >
+                              📄 Ver comprobante
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -366,7 +388,12 @@ export default function App() {
           cuentas={cuentas}
           defaultOrigenId={typeof modalTransfer === 'number' ? modalTransfer : null}
           onClose={() => setModalTransfer(false)}
-          onSuccess={showSuccessNotice}
+          onSuccess={(msg, transferData) => {
+            showSuccessNotice(msg);
+            if (transferData) {
+              setComprobanteSeleccionado(transferData);
+            }
+          }}
         />
       )}
 
@@ -374,6 +401,13 @@ export default function App() {
         <CreateAccountModal
           onClose={() => setModalCreateAccount(false)}
           onSuccess={showSuccessNotice}
+        />
+      )}
+
+      {comprobanteSeleccionado && (
+        <ComprobanteModal
+          transferencia={comprobanteSeleccionado}
+          onClose={() => setComprobanteSeleccionado(null)}
         />
       )}
     </div>
